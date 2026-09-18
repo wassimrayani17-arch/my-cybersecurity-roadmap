@@ -8,6 +8,7 @@ A lightweight RESTful API built with Python, FastAPI, and MySQL for managing tas
 - Comments attached to individual tasks
 - Request/response validation via Pydantic
 - Interactive OpenAPI docs at `/docs` out of the box
+- Automated `pytest` test suite covering the task endpoints
 
 ## Project Structure
 
@@ -19,6 +20,9 @@ task_tracker_api/
 │   ├── routes.py     # API endpoints
 │   ├── models.py     # Pydantic request/response models
 │   └── db.py         # MySQL connection helper
+├── tests/
+│   ├── conftest.py    # Pytest fixtures (test DB setup/teardown, test client)
+│   └── test_tasks.py  # Tests for the task endpoints
 ├── schema.sql        # Database schema (users, tasks, comments)
 └── requirements.txt
 ```
@@ -33,7 +37,7 @@ task_tracker_api/
 ### 1. Clone the repository
 
 ```bash
-git clone <your-repo-url>
+git clone <https://github.com/wassimrayani17-arch/my-cybersecurity-roadmap.git>
 cd task_tracker_api
 ```
 
@@ -119,7 +123,44 @@ The API is then available at `http://127.0.0.1:8000`, with interactive docs at `
 | GET    | `/tasks/{task_id}/comments` | List comments for a task     |
 | POST   | `/tasks/{task_id}/comments` | Add a comment to a task      |
 
-## Testing the API
+## Running the Automated Tests
+
+The `tests/` directory contains a `pytest` suite that exercises the task endpoints (create, get, update, delete, and validation/not-found cases).
+
+### 1. Set up a dedicated test database
+
+The tests run against a **separate** MySQL database so they never touch your real data. `tests/conftest.py` creates and drops its own tables automatically on each test run, but the database itself needs to exist first and the connecting user needs privileges on it:
+
+```bash
+mysql -u root -p -e "CREATE DATABASE fastapi_test_db;"
+mysql -u root -p -e "GRANT ALL PRIVILEGES ON fastapi_test_db.* TO 'task_api'@'localhost';"
+```
+
+> The test database name (`fastapi_test_db`) is hardcoded in `tests/conftest.py`. If you rename it there, update the command above to match.
+
+### 2. Set the database password
+
+The tests reuse the same `task_api` MySQL user as the app, and read the password from the same `DB_PASSWORD` environment variable described in [step 5 of Setup](#5-set-the-database-password). Make sure it's set in your terminal before running tests:
+
+```bash
+export DB_PASSWORD=your_password_here
+```
+
+### 3. Run the tests
+
+```bash
+pytest
+```
+
+For more detail, use `pytest -v`, or run a single file/test with `pytest tests/test_tasks.py` or `pytest tests/test_tasks.py::test_create_task`.
+
+### How the test fixtures work
+
+- The `db_connection` fixture (in `tests/conftest.py`) creates fresh `tasks` and `comments` tables in `fastapi_test_db` before each test, and drops them afterward — so every test starts from a clean, empty database.
+- It also monkeypatches `app.db.get_connection` so the app talks to the test database instead of your real `task_tracker` database for the duration of the test.
+- The `client` fixture builds on `db_connection` and provides a FastAPI `TestClient` for making requests directly against the app in-process (no running server required).
+
+## Testing the API Manually
 
 ### From the browser
 
@@ -166,9 +207,5 @@ Add `-i` to any curl command to see the HTTP status code and headers.
 - `DB_HOST`, `DB_USER`, and `DB_NAME` are currently hardcoded in `app/db.py` (`localhost`, `task_api`, `task_tracker`). This is fine for local development; if this project is deployed elsewhere, those should move to environment variables too, since the host and database name are likely to differ per environment.
 - `owner_id` exists on the `tasks` table but isn't used by any route yet — there's no authentication layer, so tasks aren't currently tied to a specific user.
 
-## Possible Next Steps
-
-- Add authentication and tie tasks to the logged-in user
-- Add pagination/filtering to `GET /tasks`
-- Add automated tests (e.g. `pytest` + `httpx`)
-- Move `DB_HOST`/`DB_USER`/`DB_NAME` to environment variables as well, ahead of deployment
+commands:
+if you made a new schema:   mysqldump -u root -p --no-data task_tracker > schema.sql
